@@ -18,29 +18,35 @@ const OUTLINE_POINTS = [[0.1801, 0.3929], [0.195, 0.4011], [0.2104, 0.4078], [0.
     const ctx = canvas.getContext('2d');
     let width, height;
 
-    // 12 sets: [scaleFactor, dotSize, opacity, driftAmount, lifespan(frames)]
-    // Set 0 = original (biggest dots, 100% opacity, slowest/least drift)
-    // Set 11 = outermost (tiniest dots, 0% opacity, fastest/most drift)
-const SETS = [
-  [ 1.000, 1.40, 1.000, 0,  480 ],
-  [ 1.025, 1.26, 0.909, 4,  420 ],
-  [ 1.052, 1.13, 0.818, 8,  370 ],
-  [ 1.081, 1.02, 0.727, 12,  320 ],
-  [ 1.113, 0.91, 0.636, 24,  280 ],
-  [ 1.148, 0.81, 0.545, 32,  240 ],
-  [ 1.187, 0.71, 0.454, 40,  200 ],
-  [ 1.232, 0.61, 0.363, 52,  170 ],
-  [ 1.284, 0.52, 0.272, 64,  140 ],
-  [ 1.345, 0.42, 0.181, 76, 110 ],
-  [ 1.418, 0.31, 0.090, 92,  85 ],
-  [ 1.506, 0.20, 0.000, 108,  65 ],
-];
+    // [baseScale, dotSize, opacity]
+    const SETS = [
+      [ 1.000, 1.40, 1.000 ],
+      [ 1.025, 1.26, 0.909 ],
+      [ 1.052, 1.13, 0.818 ],
+      [ 1.081, 1.02, 0.727 ],
+      [ 1.113, 0.91, 0.636 ],
+      [ 1.148, 0.81, 0.545 ],
+      [ 1.187, 0.71, 0.454 ],
+      [ 1.232, 0.61, 0.363 ],
+      [ 1.284, 0.52, 0.272 ],
+      [ 1.345, 0.42, 0.181 ],
+      [ 1.418, 0.31, 0.090 ],
+      [ 1.506, 0.20, 0.000 ],
+    ];
+
+    // Breathing config
+    // Set 0 breathes least, set 11 breathes most
+    // amplitude: how much the scale oscillates (outer sets move more)
+    const BREATH_SPEED     = 0.0008; // radians per ms — full cycle ~7.8s
+    const BREATH_AMP_MIN   = 0.008;  // amplitude for innermost set
+    const BREATH_AMP_MAX   = 0.06;   // amplitude for outermost set
 
     const fov           = 800;
     const repelRadius   = 130;
     const repelStrength = 2.5;
 
     const mouse = { x: null, y: null };
+    let elapsed = 0; // global time for breathing
 
     function getLogoTransform() {
       const svgAspect = 692 / 655;
@@ -76,12 +82,14 @@ const SETS = [
     function resize() {
       width  = canvas.width  = canvas.offsetWidth  || 800;
       height = canvas.height = canvas.offsetHeight || 600;
+      // Snap all particles to their current animated position
       particles.forEach(p => {
-        const pt = getBasePos(p.ptIdx, p.scaleFactor);
+        const breathe = Math.sin(elapsed) * p.breathAmp;
+        const pt = getBasePos(p.ptIdx, p.baseScale + breathe);
         p.originX = pt.x;
         p.originY = pt.y;
-        p.x = pt.x + p.offsetX;
-        p.y = pt.y + p.offsetY;
+        p.x = pt.x;
+        p.y = pt.y;
       });
     }
 
@@ -95,38 +103,26 @@ const SETS = [
 
     class Particle {
       constructor(ptIdx, setIdx) {
-        this.ptIdx       = ptIdx;
-        this.setIdx      = setIdx;
-        this.scaleFactor = SETS[setIdx][0];
-        this.dotSize     = SETS[setIdx][1];
-        this.opacity     = SETS[setIdx][2];
-        this.driftAmount = SETS[setIdx][3];
-        this.maxLife     = SETS[setIdx][4] + Math.floor(Math.random() * SETS[setIdx][4] * 0.3);
+        this.ptIdx     = ptIdx;
+        this.setIdx    = setIdx;
+        this.baseScale = SETS[setIdx][0];
+        this.dotSize   = SETS[setIdx][1];
+        this.opacity   = SETS[setIdx][2];
+        // Amplitude scales linearly from inner to outer set
+        const t = setIdx / (SETS.length - 1);
+        this.breathAmp = BREATH_AMP_MIN + t * (BREATH_AMP_MAX - BREATH_AMP_MIN);
         this.vx = 0; this.vy = 0;
         this.z = (Math.random() - 0.5) * 15;
-        // Random drift offset, refreshed on respawn
-        this.offsetX = (Math.random() - 0.5) * this.driftAmount;
-        this.offsetY = (Math.random() - 0.5) * this.driftAmount;
-        this.life = Math.floor(Math.random() * this.maxLife); // stagger on init
-        const pt = getBasePos(ptIdx, this.scaleFactor);
-        this.originX = pt.x;
-        this.originY = pt.y;
-        this.x = pt.x + this.offsetX;
-        this.y = pt.y + this.offsetY;
-      }
-      respawn() {
-        this.life = 0;
-        this.maxLife = SETS[this.setIdx][4] + Math.floor(Math.random() * SETS[this.setIdx][4] * 0.3);
-        this.offsetX = (Math.random() - 0.5) * this.driftAmount;
-        this.offsetY = (Math.random() - 0.5) * this.driftAmount;
+        const pt = getBasePos(ptIdx, this.baseScale);
+        this.x = this.originX = pt.x;
+        this.y = this.originY = pt.y;
       }
       update(dt) {
-        this.life += dt;
-        if (this.life >= this.maxLife) this.respawn();
-
-        // Target = origin + current drift offset
-        const targetX = this.originX + this.offsetX;
-        const targetY = this.originY + this.offsetY;
+        // Recompute origin based on current breath phase — all particles share global elapsed
+        const breathe = Math.sin(elapsed) * this.breathAmp;
+        const pt = getBasePos(this.ptIdx, this.baseScale + breathe);
+        this.originX = pt.x;
+        this.originY = pt.y;
 
         // Repel
         if (mouse.x !== null) {
@@ -144,9 +140,9 @@ const SETS = [
           }
         }
 
-        // Spring to drifted target
-        this.vx += (targetX - this.x) * 0.12;
-        this.vy += (targetY - this.y) * 0.12;
+        // Spring to breathing origin
+        this.vx += (this.originX - this.x) * 0.15;
+        this.vy += (this.originY - this.y) * 0.15;
 
         this.x += this.vx * dt;
         this.y += this.vy * dt;
@@ -156,16 +152,11 @@ const SETS = [
       }
       draw() {
         if (this.opacity === 0) return;
-        // Fade in/out based on life
-        const finalOpacity = this.opacity;
-        if (finalOpacity <= 0.01) return;
-
         const sc = fov / (fov + this.z);
         const cx = width/2, cy = height/2;
         const sx = cx + (this.x - cx) * sc;
         const sy = cy + (this.y - cy) * sc;
-
-        ctx.globalAlpha = finalOpacity;
+        ctx.globalAlpha = this.opacity;
         ctx.beginPath();
         ctx.arc(sx, sy, this.dotSize * sc, 0, Math.PI*2);
         ctx.fillStyle = '#fff';
@@ -186,8 +177,13 @@ const SETS = [
     let lastTime = 0;
     function animate(time) {
       if (!lastTime) lastTime = time;
-      const dt = Math.min((time - lastTime) / 16.666, 3);
+      const rawDt = time - lastTime;
+      const dt = Math.min(rawDt / 16.666, 3);
       lastTime = time;
+
+      // Advance global breath timer
+      elapsed += rawDt * BREATH_SPEED;
+
       ctx.clearRect(0, 0, width, height);
       for (let i = 0; i < particles.length; i++) {
         particles[i].update(dt);
