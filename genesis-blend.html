@@ -18,19 +18,22 @@ const OUTLINE_POINTS = [[0.1801, 0.3929], [0.195, 0.4011], [0.2104, 0.4078], [0.
     const ctx = canvas.getContext('2d');
     let width, height;
 
-    // 9 sets: each one is scale factor larger than original
-    // scale grows outward, dot size shrinks, opacity fades to 0
-    // [scaleFactor, dotSize, opacity]
+    // 12 sets: [scaleFactor, dotSize, opacity, driftAmount, lifespan(frames)]
+    // Set 0 = original (biggest dots, 100% opacity, slowest/least drift)
+    // Set 11 = outermost (tiniest dots, 0% opacity, fastest/most drift)
     const SETS = [
-      [ 1.000, 1.8,  1.00 ],
-      [ 1.030, 1.55, 0.875],
-      [ 1.060, 1.30, 0.75 ],
-      [ 1.090, 1.10, 0.625],
-      [ 1.120, 0.90, 0.50 ],
-      [ 1.160, 0.72, 0.375],
-      [ 1.200, 0.55, 0.25 ],
-      [ 1.240, 0.38, 0.125],
-      [ 1.300, 0.22, 0.00 ],
+      [ 1.000, 1.00, 1.000,  1.5, 480 ],
+      [ 1.025, 0.90, 0.909,  2.5, 420 ],
+      [ 1.052, 0.81, 0.818,  3.8, 370 ],
+      [ 1.081, 0.73, 0.727,  5.5, 320 ],
+      [ 1.113, 0.65, 0.636,  7.5, 280 ],
+      [ 1.148, 0.58, 0.545, 10.0, 240 ],
+      [ 1.187, 0.51, 0.454, 13.0, 200 ],
+      [ 1.232, 0.44, 0.363, 17.0, 170 ],
+      [ 1.284, 0.37, 0.272, 22.0, 140 ],
+      [ 1.345, 0.30, 0.181, 28.0, 110 ],
+      [ 1.418, 0.22, 0.090, 36.0,  85 ],
+      [ 1.506, 0.14, 0.000, 46.0,  65 ],
     ];
 
     const fov           = 800;
@@ -55,20 +58,13 @@ const OUTLINE_POINTS = [[0.1801, 0.3929], [0.195, 0.4011], [0.2104, 0.4078], [0.
       return { scale, ox, oy, svgAspect };
     }
 
-    // Get base canvas position for a point, scaled around logo center
     function getBasePos(idx, scaleFactor) {
       const [nx, ny] = OUTLINE_POINTS[idx];
       const { scale, ox, oy, svgAspect } = getLogoTransform();
-
-      // Canvas position at scale=1
       const bx = ox + (nx + 1) / 2 * scale * svgAspect;
       const by = oy + (ny + 1) / 2 * scale;
-
-      // Logo center in canvas coords
       const cx = ox + scale * svgAspect / 2;
       const cy = oy + scale / 2;
-
-      // Scale outward from center
       return {
         x: cx + (bx - cx) * scaleFactor,
         y: cy + (by - cy) * scaleFactor
@@ -84,8 +80,8 @@ const OUTLINE_POINTS = [[0.1801, 0.3929], [0.195, 0.4011], [0.2104, 0.4078], [0.
         const pt = getBasePos(p.ptIdx, p.scaleFactor);
         p.originX = pt.x;
         p.originY = pt.y;
-        p.x = pt.x;
-        p.y = pt.y;
+        p.x = pt.x + p.offsetX;
+        p.y = pt.y + p.offsetY;
       });
     }
 
@@ -100,16 +96,39 @@ const OUTLINE_POINTS = [[0.1801, 0.3929], [0.195, 0.4011], [0.2104, 0.4078], [0.
     class Particle {
       constructor(ptIdx, setIdx) {
         this.ptIdx       = ptIdx;
+        this.setIdx      = setIdx;
         this.scaleFactor = SETS[setIdx][0];
         this.dotSize     = SETS[setIdx][1];
         this.opacity     = SETS[setIdx][2];
+        this.driftAmount = SETS[setIdx][3];
+        this.maxLife     = SETS[setIdx][4] + Math.floor(Math.random() * SETS[setIdx][4] * 0.3);
         this.vx = 0; this.vy = 0;
         this.z = (Math.random() - 0.5) * 15;
+        // Random drift offset, refreshed on respawn
+        this.offsetX = (Math.random() - 0.5) * this.driftAmount;
+        this.offsetY = (Math.random() - 0.5) * this.driftAmount;
+        this.life = Math.floor(Math.random() * this.maxLife); // stagger on init
         const pt = getBasePos(ptIdx, this.scaleFactor);
-        this.x = this.originX = pt.x;
-        this.y = this.originY = pt.y;
+        this.originX = pt.x;
+        this.originY = pt.y;
+        this.x = pt.x + this.offsetX;
+        this.y = pt.y + this.offsetY;
+      }
+      respawn() {
+        this.life = 0;
+        this.maxLife = SETS[this.setIdx][4] + Math.floor(Math.random() * SETS[this.setIdx][4] * 0.3);
+        this.offsetX = (Math.random() - 0.5) * this.driftAmount;
+        this.offsetY = (Math.random() - 0.5) * this.driftAmount;
       }
       update(dt) {
+        this.life += dt;
+        if (this.life >= this.maxLife) this.respawn();
+
+        // Target = origin + current drift offset
+        const targetX = this.originX + this.offsetX;
+        const targetY = this.originY + this.offsetY;
+
+        // Repel
         if (mouse.x !== null) {
           const sc = fov / (fov + this.z);
           const cx = width/2, cy = height/2;
@@ -125,23 +144,30 @@ const OUTLINE_POINTS = [[0.1801, 0.3929], [0.195, 0.4011], [0.2104, 0.4078], [0.
           }
         }
 
-        // Snap back
-        this.vx += (this.originX - this.x) * 0.14;
-        this.vy += (this.originY - this.y) * 0.14;
+        // Spring to drifted target
+        this.vx += (targetX - this.x) * 0.12;
+        this.vy += (targetY - this.y) * 0.12;
 
         this.x += this.vx * dt;
         this.y += this.vy * dt;
 
-        this.vx *= 0.72;
-        this.vy *= 0.72;
+        this.vx *= 0.75;
+        this.vy *= 0.75;
       }
       draw() {
         if (this.opacity === 0) return;
+        // Fade in/out based on life
+        const lifeRatio = this.life / this.maxLife;
+        const fade = Math.sin(lifeRatio * Math.PI);
+        const finalOpacity = this.opacity * fade;
+        if (finalOpacity <= 0.01) return;
+
         const sc = fov / (fov + this.z);
         const cx = width/2, cy = height/2;
         const sx = cx + (this.x - cx) * sc;
         const sy = cy + (this.y - cy) * sc;
-        ctx.globalAlpha = this.opacity;
+
+        ctx.globalAlpha = finalOpacity;
         ctx.beginPath();
         ctx.arc(sx, sy, this.dotSize * sc, 0, Math.PI*2);
         ctx.fillStyle = '#fff';
@@ -153,7 +179,6 @@ const OUTLINE_POINTS = [[0.1801, 0.3929], [0.195, 0.4011], [0.2104, 0.4078], [0.
     width  = canvas.width  = canvas.offsetWidth  || 800;
     height = canvas.height = canvas.offsetHeight || 600;
 
-    // Draw back to front: set 8 first (biggest, most transparent), set 0 last
     for (let s = SETS.length - 1; s >= 0; s--) {
       for (let i = 0; i < OUTLINE_POINTS.length; i++) {
         particles.push(new Particle(i, s));
@@ -174,6 +199,5 @@ const OUTLINE_POINTS = [[0.1801, 0.3929], [0.195, 0.4011], [0.2104, 0.4078], [0.
     }
     requestAnimationFrame(animate);
   </script>
-
 
 </body></html>
