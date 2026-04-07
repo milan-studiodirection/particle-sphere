@@ -86,8 +86,8 @@ const OUTLINE_POINTS = [[0.1801, 0.3929], [0.195, 0.4011], [0.2104, 0.4078], [0.
       particles.forEach(p => {
         const s = Math.sin(elapsed);
         const breathe = s < 0 
-          ? s * this.breathAmp * 1.0   // skupljanje — ide 50% prema unutra
-          : s * this.breathAmp * 2.0;  // širenje — ide 200% prema van
+          ? s * this.breathAmp * 2.0   // skupljanje — ide 50% prema unutra
+          : s * this.breathAmp * 4.0;  // širenje — ide 200% prema van
         const pt = getBasePos(p.ptIdx, p.baseScale + breathe);
         p.originX = pt.x;
         p.originY = pt.y;
