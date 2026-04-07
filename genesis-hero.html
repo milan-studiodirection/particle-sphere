@@ -30,20 +30,20 @@
     let width, height, mainRadius, tubeRadius;
 
     // — Config —
-    const numParticles   = 1800;
-    const fov            = 800;
-    const minSize        = 0.5;
-    const maxSize        = 2;
-    const globalSpeed    = 0.8;
-    const blurFraction   = 0;
-    const blurIntensity  = 0;
-    const baseLifespan   = 4;   // seconds
-    const repelRadius    = 160;
-    const repelStrength  = 1.8;
+    const numParticles  = 1800;
+    const fov           = 800;
+    const minSize       = 0.5;
+    const maxSize       = 2;
+    const globalSpeed   = 0.8;
+    const blurFraction  = 0;
+    const blurIntensity = 0;
+    const baseLifespan  = 4;
+    const repelRadius   = 160;
+    const repelStrength = 1.8;
+    const springStrength = 0.02;
 
     const mouse = { x: null, y: null };
 
-    // Pre-render blur dot
     const blurCanvas = document.createElement('canvas');
     blurCanvas.width = blurCanvas.height = 64;
     const blurCtx = blurCanvas.getContext('2d');
@@ -90,14 +90,18 @@
         this.x = (mainRadius + rm * Math.cos(v)) * Math.cos(u);
         this.y = (mainRadius + rm * Math.cos(v)) * Math.sin(u);
         this.z = rm * Math.sin(v);
-        const sp = 0.25;
+        this.originX = this.x;
+        this.originY = this.y;
+        this.originZ = this.z;
+        const sp = 0.08;
         this.baseVx = (Math.random() - 0.5) * sp;
         this.baseVy = (Math.random() - 0.5) * sp;
         this.baseVz = (Math.random() - 0.5) * sp;
         this.vx = 0;
         this.vy = 0;
+        this.vz = 0;
         this.sizeFactor = Math.random();
-        this.isBlurred   = Math.random() < blurFraction;
+        this.isBlurred  = Math.random() < blurFraction;
       }
       update(dt) {
         this.life += dt;
@@ -117,11 +121,18 @@
           }
         }
 
+        // Spring — vuče nazad na originalnu poziciju
+        this.vx += (this.originX - this.x) * springStrength;
+        this.vy += (this.originY - this.y) * springStrength;
+        this.vz += (this.originZ - this.z) * springStrength;
+
         this.x += (this.baseVx * globalSpeed + this.vx) * dt;
         this.y += (this.baseVy * globalSpeed + this.vy) * dt;
-        this.z +=  this.baseVz * globalSpeed * dt;
+        this.z += (this.baseVz * globalSpeed + this.vz) * dt;
+
         this.vx *= 0.85;
         this.vy *= 0.85;
+        this.vz *= 0.85;
       }
       draw() {
         const sc = fov / (fov + this.z);
