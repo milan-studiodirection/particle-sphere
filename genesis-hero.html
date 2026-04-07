@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Particle Hero</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: transparent;
+    }
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="canvas"></canvas>
+  <script>
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+
+    let width, height, mainRadius, tubeRadius;
+
+    // — Config —
+    const numParticles   = 1800;
+    const fov            = 800;
+    const minSize        = 0.5;
+    const maxSize        = 2.5;
+    const globalSpeed    = 0.8;
+    const blurFraction   = 0.25;
+    const blurIntensity  = 6;
+    const baseLifespan   = 4;   // seconds
+    const repelRadius    = 160;
+    const repelStrength  = 1.8;
+
+    const mouse = { x: null, y: null };
+
+    // Pre-render blur dot
+    const blurCanvas = document.createElement('canvas');
+    blurCanvas.width = blurCanvas.height = 64;
+    const blurCtx = blurCanvas.getContext('2d');
+    const bc = 32;
+    const grad = blurCtx.createRadialGradient(bc, bc, 0, bc, bc, bc);
+    grad.addColorStop(0,   'rgba(255,255,255,1)');
+    grad.addColorStop(0.2, 'rgba(255,255,255,0.8)');
+    grad.addColorStop(1,   'rgba(255,255,255,0)');
+    blurCtx.fillStyle = grad;
+    blurCtx.beginPath();
+    blurCtx.arc(bc, bc, bc, 0, Math.PI * 2);
+    blurCtx.fill();
+
+    function resize() {
+      width  = canvas.width  = canvas.offsetWidth;
+      height = canvas.height = canvas.offsetHeight;
+      mainRadius = Math.min(width, height) * 0.25;
+      tubeRadius = Math.min(width, height) * 0.15;
+    }
+
+    window.addEventListener('resize', resize);
+    resize();
+
+    window.addEventListener('mousemove', e => {
+      const r = canvas.getBoundingClientRect();
+      mouse.x = e.clientX - r.left;
+      mouse.y = e.clientY - r.top;
+    });
+    window.addEventListener('mouseleave', () => { mouse.x = null; mouse.y = null; });
+
+    const particles = [];
+
+    class Particle {
+      constructor(isInitial = false) {
+        this.init();
+        if (isInitial) this.life = Math.random() * this.maxLife;
+      }
+      init() {
+        this.maxLife = (baseLifespan * 60) + Math.random() * 60;
+        this.life = 0;
+        const u = Math.random() * 2 * Math.PI;
+        const v = Math.random() * 2 * Math.PI;
+        const rm = Math.random() * tubeRadius;
+        this.x = (mainRadius + rm * Math.cos(v)) * Math.cos(u);
+        this.y = (mainRadius + rm * Math.cos(v)) * Math.sin(u);
+        this.z = rm * Math.sin(v);
+        const sp = 0.25;
+        this.baseVx = (Math.random() - 0.5) * sp;
+        this.baseVy = (Math.random() - 0.5) * sp;
+        this.baseVz = (Math.random() - 0.5) * sp;
+        this.vx = 0;
+        this.vy = 0;
+        this.sizeFactor = Math.random();
+        this.isBlurred   = Math.random() < blurFraction;
+      }
+      update(dt) {
+        this.life += dt;
+        if (this.life >= this.maxLife) this.init();
+
+        if (mouse.x !== null) {
+          const sc = fov / (fov + this.z);
+          const sx = width  / 2 + this.x * sc;
+          const sy = height / 2 + this.y * sc;
+          const dx = sx - mouse.x, dy = sy - mouse.y;
+          const d2 = dx * dx + dy * dy;
+          if (d2 < repelRadius * repelRadius && d2 > 0) {
+            const d = Math.sqrt(d2);
+            const f = ((repelRadius - d) / repelRadius) * repelStrength;
+            this.vx += (dx / d) * f;
+            this.vy += (dy / d) * f;
+          }
+        }
+
+        this.x += (this.baseVx * globalSpeed + this.vx) * dt;
+        this.y += (this.baseVy * globalSpeed + this.vy) * dt;
+        this.z +=  this.baseVz * globalSpeed * dt;
+        this.vx *= 0.85;
+        this.vy *= 0.85;
+      }
+      draw() {
+        const sc = fov / (fov + this.z);
+        const sx = width  / 2 + this.x * sc;
+        const sy = height / 2 + this.y * sc;
+        const op = Math.sin((this.life / this.maxLife) * Math.PI);
+        const as = minSize + this.sizeFactor * (maxSize - minSize);
+        ctx.globalAlpha = op;
+        if (this.isBlurred) {
+          const ds = as * sc * blurIntensity;
+          ctx.drawImage(blurCanvas, sx - ds / 2, sy - ds / 2, ds, ds);
+        } else {
+          ctx.beginPath();
+          ctx.arc(sx, sy, as * sc, 0, Math.PI * 2);
+          ctx.fillStyle = '#fff';
+          ctx.fill();
+        }
+        ctx.globalAlpha = 1;
+      }
+    }
+
+    for (let i = 0; i < numParticles; i++) particles.push(new Particle(true));
+
+    let lastTime = 0;
+    function animate(time) {
+      if (!lastTime) lastTime = time;
+      const dt = (time - lastTime) / 16.666;
+      lastTime = time;
+      ctx.clearRect(0, 0, width, height);
+      particles.sort((a, b) => b.z - a.z);
+      for (let i = 0; i < particles.length; i++) {
+        particles[i].update(dt);
+        particles[i].draw();
+      }
+      requestAnimationFrame(animate);
+    }
+    requestAnimationFrame(animate);
+  </script>
+</body>
+</html>
