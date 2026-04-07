@@ -1,0 +1,637 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Particle Sphere</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      padding: 0;
+      background-color: #000;
+      overflow: hidden;
+      display: flex;
+      height: 100vh;
+      width: 100vw;
+      font-family: 'Segoe UI', system-ui, sans-serif;
+    }
+
+    #controls {
+      width: 220px;
+      min-width: 220px;
+      height: 100vh;
+      background: #0a0a0a;
+      border-right: 1px solid #1e1e1e;
+      display: flex;
+      flex-direction: column;
+      overflow-y: auto;
+      overflow-x: hidden;
+      z-index: 10;
+      scrollbar-width: thin;
+      scrollbar-color: #2a2a2a transparent;
+    }
+
+    #controls::-webkit-scrollbar { width: 4px; }
+    #controls::-webkit-scrollbar-thumb { background: #2a2a2a; border-radius: 2px; }
+
+    .sidebar-header {
+      padding: 20px 16px 14px;
+      border-bottom: 1px solid #1a1a1a;
+    }
+
+    .sidebar-title {
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: #444;
+      margin: 0;
+    }
+
+    .section {
+      padding: 14px 16px;
+      border-bottom: 1px solid #141414;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .section-label {
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: #333;
+    }
+
+    .control-row {
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+    }
+
+    .control-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    label {
+      font-size: 12px;
+      color: #888;
+      margin: 0;
+      white-space: nowrap;
+    }
+
+    .value-badge {
+      font-size: 11px;
+      color: #555;
+      font-variant-numeric: tabular-nums;
+      min-width: 28px;
+      text-align: right;
+    }
+
+    input[type=range] {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 100%;
+      height: 3px;
+      background: #1e1e1e;
+      border-radius: 2px;
+      outline: none;
+      cursor: pointer;
+    }
+
+    input[type=range]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: #3b82f6;
+      cursor: pointer;
+      transition: background .15s, transform .15s;
+    }
+
+    input[type=range]::-webkit-slider-thumb:hover {
+      background: #60a5fa;
+      transform: scale(1.2);
+    }
+
+    input[type=range]::-moz-range-thumb {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: #3b82f6;
+      cursor: pointer;
+      border: none;
+    }
+
+    input[type=number] {
+      width: 52px;
+      background: #111;
+      color: #aaa;
+      border: 1px solid #222;
+      padding: 4px 6px;
+      border-radius: 5px;
+      font-size: 12px;
+      outline: none;
+    }
+
+    input[type=number]:focus { border-color: #3b82f6; }
+
+    .toggle-row {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .toggle-label {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      cursor: pointer;
+      font-size: 12px;
+      color: #888;
+      user-select: none;
+    }
+
+    .toggle-label input[type=checkbox] { display: none; }
+
+    .toggle-label .check-box {
+      width: 14px;
+      height: 14px;
+      border: 1px solid #333;
+      border-radius: 3px;
+      background: #111;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background .15s, border-color .15s;
+      flex-shrink: 0;
+    }
+
+    .toggle-label input:checked ~ .check-box {
+      background: #3b82f6;
+      border-color: #3b82f6;
+    }
+
+    .toggle-label .check-box::after {
+      content: '';
+      width: 6px;
+      height: 4px;
+      border-left: 1.5px solid white;
+      border-bottom: 1.5px solid white;
+      transform: rotate(-45deg) translateY(-1px);
+      opacity: 0;
+      transition: opacity .15s;
+    }
+
+    .toggle-label input:checked ~ .check-box::after { opacity: 1; }
+
+    select {
+      -webkit-appearance: none;
+      appearance: none;
+      background: #111 url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%23444' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E") no-repeat right 8px center;
+      color: #aaa;
+      border: 1px solid #222;
+      padding: 5px 24px 5px 8px;
+      border-radius: 5px;
+      font-size: 12px;
+      cursor: pointer;
+      outline: none;
+      width: 100%;
+    }
+
+    select:focus { border-color: #3b82f6; }
+
+    .select-row { display: flex; gap: 6px; }
+    .select-row select { flex: 1; }
+
+    .minmax-row { display: flex; align-items: center; gap: 6px; }
+    .minmax-row span { color: #333; font-size: 12px; }
+
+    button {
+      background: #161616;
+      color: #aaa;
+      border: 1px solid #222;
+      padding: 7px 12px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 12px;
+      width: 100%;
+      transition: background .15s, color .15s, border-color .15s;
+      text-align: center;
+    }
+
+    button:hover { background: #1e1e1e; color: #fff; border-color: #333; }
+    button.recording { background: #7f1d1d; color: #fca5a5; border-color: #991b1b; }
+
+    .export-row { display: flex; flex-direction: column; gap: 6px; }
+
+    .export-item { display: flex; gap: 6px; align-items: center; }
+    .export-item select { flex: 1; }
+    .export-item button { width: auto; padding: 6px 10px; white-space: nowrap; }
+
+    #canvas-wrapper {
+      flex: 1;
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+    }
+
+    canvas { display: block; }
+  </style>
+</head>
+<body>
+
+  <div id="controls">
+    <div class="sidebar-header">
+      <p class="sidebar-title">Particle Torus</p>
+    </div>
+
+    <div class="section">
+      <div class="section-label">Shape</div>
+      <div class="control-row">
+        <div class="control-header">
+          <label>Size</label>
+          <span class="value-badge" id="sizeVal">100</span>
+        </div>
+        <input type="range" id="sizeInput" min="10" max="300" step="1" value="100" oninput="document.getElementById('sizeVal').textContent=this.value">
+      </div>
+      <div class="control-row">
+        <div class="control-header">
+          <label>Width</label>
+          <span class="value-badge" id="widthVal">100</span>
+        </div>
+        <input type="range" id="widthInput" min="10" max="300" step="1" value="100" oninput="document.getElementById('widthVal').textContent=this.value">
+      </div>
+      <div class="control-row">
+        <div class="control-header">
+          <label>Speed</label>
+          <span class="value-badge" id="speedVal">1.0</span>
+        </div>
+        <input type="range" id="speedInput" min="0" max="5" step="0.1" value="1" oninput="document.getElementById('speedVal').textContent=parseFloat(this.value).toFixed(1)">
+      </div>
+      <div class="control-row">
+        <div class="control-header">
+          <label>Birth Rate</label>
+          <span class="value-badge" id="lifespanVal">3.0</span>
+        </div>
+        <input type="range" id="lifespanInput" min="1" max="8" step="0.5" value="3" oninput="document.getElementById('lifespanVal').textContent=parseFloat(this.value).toFixed(1)">
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-label">Particles</div>
+      <div class="control-row">
+        <label>Dot Size (Min – Max)</label>
+        <div class="minmax-row">
+          <input type="number" id="minSizeInput" min="0.1" max="10" step="0.1" value="0.5">
+          <span>–</span>
+          <input type="number" id="maxSizeInput" min="0.1" max="20" step="0.1" value="3.0">
+        </div>
+      </div>
+      <div class="control-row">
+        <label>Blur</label>
+        <div class="select-row">
+          <select id="blurSelect">
+            <option value="0">None</option>
+            <option value="0.125">1/8</option>
+            <option value="0.25">1/4</option>
+            <option value="0.5">1/2</option>
+          </select>
+          <select id="blurAmountSelect">
+            <option value="3">Min</option>
+            <option value="6" selected>Mid</option>
+            <option value="12">Max</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-label">Lines</div>
+      <div class="toggle-row">
+        <label class="toggle-label">
+          <input type="checkbox" id="linesCheckbox">
+          <span class="check-box"></span>
+          Enable
+        </label>
+        <label class="toggle-label">
+          <input type="checkbox" id="curvesCheckbox">
+          <span class="check-box"></span>
+          Curves
+        </label>
+      </div>
+      <div class="control-row">
+        <div class="control-header">
+          <label>Length</label>
+          <span class="value-badge" id="lineLenVal">20</span>
+        </div>
+        <input type="range" id="lineLengthInput" min="20" max="100" step="1" value="20" oninput="document.getElementById('lineLenVal').textContent=this.value">
+      </div>
+      <div class="control-row">
+        <div class="control-header">
+          <label>Amount</label>
+          <span class="value-badge" id="lineAmtVal">0.25</span>
+        </div>
+        <input type="range" id="lineAmountInput" min="0" max="1" step="0.05" value="0.25" oninput="document.getElementById('lineAmtVal').textContent=parseFloat(this.value).toFixed(2)">
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-label">Interaction</div>
+      <label class="toggle-label">
+        <input type="checkbox" id="cursorCheckbox">
+        <span class="check-box"></span>
+        Cursor Interact
+      </label>
+      <div class="control-row">
+        <label>Type</label>
+        <select id="interactionTypeSelect">
+          <option value="repel" selected>Repel</option>
+          <option value="attract">Attract</option>
+        </select>
+      </div>
+      <div class="control-row">
+        <label>Strength</label>
+        <select id="interactionStrengthSelect">
+          <option value="0.5">Min</option>
+          <option value="1.5" selected>Mid</option>
+          <option value="4.0">Max</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-label">Export</div>
+      <div class="export-row">
+        <label>Image</label>
+        <div class="export-item">
+          <select id="imgResSelect">
+            <option value="current">Current</option>
+            <option value="1080">1080p</option>
+            <option value="1440">1440p</option>
+            <option value="2160">4K</option>
+          </select>
+          <button onclick="exportPNG()">Save</button>
+        </div>
+      </div>
+      <div class="export-row">
+        <label>Video</label>
+        <div class="export-item">
+          <select id="resSelect">
+            <option value="current">Current</option>
+            <option value="1080">1080p</option>
+            <option value="1440">1440p</option>
+          </select>
+          <button id="recordBtn" onclick="toggleRecording()">Record</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="canvas-wrapper">
+    <canvas id="canvas"></canvas>
+  </div>
+
+  <script>
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    const wrapper = document.getElementById('canvas-wrapper');
+
+    let width, height, mainRadius, tubeRadius;
+    let globalSpeed = 1, donutSizePercent = 1, donutWidthPercent = 1;
+    let minSize = 0.5, maxSize = 3.0, blurFraction = 0;
+    let linesEnabled = false, curvesEnabled = false;
+    let maxLineLength = 20, lineAmount = 0.25, blurIntensity = 6;
+    let baseLifespanSeconds = 3, cursorInteractionEnabled = false;
+    let interactionType = 'repel', interactionStrength = 1.5;
+
+    const mouse = { x: null, y: null };
+    const numParticles = 2500, fov = 800, particles = [];
+
+    const blurCanvas = document.createElement('canvas');
+    const blurCtx = blurCanvas.getContext('2d');
+    blurCanvas.width = blurCanvas.height = 64;
+    const bc = 32;
+    const grad = blurCtx.createRadialGradient(bc, bc, 0, bc, bc, bc);
+    grad.addColorStop(0, 'rgba(255,255,255,1)');
+    grad.addColorStop(0.2, 'rgba(255,255,255,0.8)');
+    grad.addColorStop(1, 'rgba(255,255,255,0)');
+    blurCtx.fillStyle = grad;
+    blurCtx.beginPath();
+    blurCtx.arc(bc, bc, bc, 0, Math.PI * 2);
+    blurCtx.fill();
+
+    let isRecording = false, mediaRecorder, recordedChunks = [], originalWidth, originalHeight;
+
+    function resize() {
+      if (isRecording) return;
+      width = canvas.width = wrapper.clientWidth;
+      height = canvas.height = wrapper.clientHeight;
+      mainRadius = Math.min(width, height) * 0.25 * donutSizePercent;
+      tubeRadius = Math.min(width, height) * 0.15 * donutWidthPercent;
+    }
+
+    window.addEventListener('resize', resize);
+    resize();
+
+    document.getElementById('speedInput').addEventListener('input', e => { globalSpeed = parseFloat(e.target.value); });
+    document.getElementById('sizeInput').addEventListener('input', e => { donutSizePercent = parseFloat(e.target.value) / 100; mainRadius = Math.min(width, height) * 0.25 * donutSizePercent; });
+    document.getElementById('widthInput').addEventListener('input', e => { donutWidthPercent = parseFloat(e.target.value) / 100; tubeRadius = Math.min(width, height) * 0.15 * donutWidthPercent; });
+    document.getElementById('minSizeInput').addEventListener('input', e => { minSize = parseFloat(e.target.value); });
+    document.getElementById('maxSizeInput').addEventListener('input', e => { maxSize = parseFloat(e.target.value); });
+    document.getElementById('blurSelect').addEventListener('change', e => { blurFraction = parseFloat(e.target.value); particles.forEach(p => p.isBlurred = Math.random() < blurFraction); });
+    document.getElementById('blurAmountSelect').addEventListener('change', e => { blurIntensity = parseFloat(e.target.value); });
+    document.getElementById('linesCheckbox').addEventListener('change', e => { linesEnabled = e.target.checked; });
+    document.getElementById('curvesCheckbox').addEventListener('change', e => { curvesEnabled = e.target.checked; });
+    document.getElementById('lineLengthInput').addEventListener('input', e => { maxLineLength = parseFloat(e.target.value); });
+    document.getElementById('lineAmountInput').addEventListener('input', e => { lineAmount = parseFloat(e.target.value); particles.forEach(p => p.canConnect = Math.random() < lineAmount); });
+    document.getElementById('lifespanInput').addEventListener('input', e => { baseLifespanSeconds = parseFloat(e.target.value); });
+    document.getElementById('cursorCheckbox').addEventListener('change', e => { cursorInteractionEnabled = e.target.checked; });
+    document.getElementById('interactionTypeSelect').addEventListener('change', e => { interactionType = e.target.value; });
+    document.getElementById('interactionStrengthSelect').addEventListener('change', e => { interactionStrength = parseFloat(e.target.value); });
+
+    window.addEventListener('mousemove', e => {
+      const r = wrapper.getBoundingClientRect();
+      mouse.x = e.clientX - r.left;
+      mouse.y = e.clientY - r.top;
+    });
+    window.addEventListener('mouseleave', () => { mouse.x = null; mouse.y = null; });
+
+    function exportPNG() {
+      const res = document.getElementById('imgResSelect').value;
+      let tw = width, th = height;
+      if (res === '1080') { tw = 1920; th = 1080; }
+      else if (res === '1440') { tw = 2560; th = 1440; }
+      else if (res === '2160') { tw = 3840; th = 2160; }
+      if (res !== 'current') {
+        const ow = width, oh = height;
+        width = canvas.width = tw; height = canvas.height = th;
+        mainRadius = Math.min(width, height) * 0.25 * donutSizePercent;
+        tubeRadius = Math.min(width, height) * 0.15 * donutWidthPercent;
+        particles.forEach(p => { p.init(); p.life = Math.random() * p.maxLife; });
+        ctx.clearRect(0, 0, width, height);
+        particles.sort((a, b) => b.z - a.z);
+        particles.forEach(p => p.draw());
+        downloadPNG(`particle-torus-${tw}x${th}.png`);
+        width = canvas.width = ow; height = canvas.height = oh;
+        mainRadius = Math.min(width, height) * 0.25 * donutSizePercent;
+        tubeRadius = Math.min(width, height) * 0.15 * donutWidthPercent;
+        particles.forEach(p => { p.init(); p.life = Math.random() * p.maxLife; });
+      } else { downloadPNG('particle-torus.png'); }
+    }
+
+    function downloadPNG(name) {
+      const a = document.createElement('a');
+      a.download = name; a.href = canvas.toDataURL('image/png'); a.click();
+    }
+
+    function toggleRecording() {
+      const btn = document.getElementById('recordBtn');
+      const rs = document.getElementById('resSelect');
+      if (!isRecording) {
+        const res = rs.value;
+        if (res === '1080') { originalWidth = width; originalHeight = height; width = canvas.width = 1920; height = canvas.height = 1080; }
+        else if (res === '1440') { originalWidth = width; originalHeight = height; width = canvas.width = 2560; height = canvas.height = 1440; }
+        if (res !== 'current') {
+          mainRadius = Math.min(width, height) * 0.25 * donutSizePercent;
+          tubeRadius = Math.min(width, height) * 0.15 * donutWidthPercent;
+          particles.forEach(p => { p.init(); p.life = Math.random() * p.maxLife; });
+        }
+        const stream = canvas.captureStream(60);
+        const vbr = 25000000;
+        let opts = { mimeType: 'video/mp4', videoBitsPerSecond: vbr };
+        if (!MediaRecorder.isTypeSupported(opts.mimeType)) opts = { mimeType: 'video/webm;codecs=vp9', videoBitsPerSecond: vbr };
+        if (!MediaRecorder.isTypeSupported(opts.mimeType)) opts = { mimeType: 'video/webm', videoBitsPerSecond: vbr };
+        mediaRecorder = new MediaRecorder(stream, opts);
+        mediaRecorder.ondataavailable = e => { if (e.data.size > 0) recordedChunks.push(e.data); };
+        mediaRecorder.onstop = () => {
+          const blob = new Blob(recordedChunks, { type: opts.mimeType });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `particle-torus.${opts.mimeType.includes('mp4') ? 'mp4' : 'webm'}`;
+          a.click(); URL.revokeObjectURL(url); recordedChunks = [];
+          if (res !== 'current') {
+            width = canvas.width = originalWidth; height = canvas.height = originalHeight;
+            mainRadius = Math.min(width, height) * 0.25 * donutSizePercent;
+            tubeRadius = Math.min(width, height) * 0.15 * donutWidthPercent;
+            particles.forEach(p => { p.init(); p.life = Math.random() * p.maxLife; });
+          }
+        };
+        mediaRecorder.start(); isRecording = true;
+        btn.textContent = 'Stop'; btn.classList.add('recording'); rs.disabled = true;
+      } else {
+        mediaRecorder.stop(); isRecording = false;
+        btn.textContent = 'Record'; btn.classList.remove('recording'); rs.disabled = false;
+      }
+    }
+
+    class Particle {
+      constructor(isInitial = false) {
+        this.init();
+        if (isInitial) this.life = Math.random() * this.maxLife;
+      }
+      init() {
+        this.maxLife = (baseLifespanSeconds * 60) + Math.random() * 60;
+        this.life = 0;
+        const u = Math.random() * 2 * Math.PI, v = Math.random() * 2 * Math.PI;
+        const rm = Math.random() * tubeRadius;
+        this.x = (mainRadius + rm * Math.cos(v)) * Math.cos(u);
+        this.y = (mainRadius + rm * Math.cos(v)) * Math.sin(u);
+        this.z = rm * Math.sin(v);
+        const sp = 0.25;
+        this.baseVx = (Math.random() - 0.5) * sp;
+        this.baseVy = (Math.random() - 0.5) * sp;
+        this.baseVz = (Math.random() - 0.5) * sp;
+        this.vx = 0; this.vy = 0;
+        this.sizeFactor = Math.random();
+        this.isBlurred = Math.random() < blurFraction;
+        this.canConnect = Math.random() < lineAmount;
+        this.sx = 0; this.sy = 0; this.currentOpacity = 0;
+      }
+      update(dt = 1) {
+        this.life += dt;
+        if (this.life >= this.maxLife) this.init();
+        if (cursorInteractionEnabled && mouse.x !== null) {
+          const sc = fov / (fov + this.z);
+          const sx = width / 2 + this.x * sc, sy = height / 2 + this.y * sc;
+          const dx = sx - mouse.x, dy = sy - mouse.y;
+          const d2 = dx * dx + dy * dy, rr = 150;
+          if (d2 < rr * rr && d2 > 0) {
+            const d = Math.sqrt(d2), f = ((rr - d) / rr) * interactionStrength;
+            const dir = interactionType === 'repel' ? 1 : -1;
+            this.vx += (dx / d) * f * dir; this.vy += (dy / d) * f * dir;
+          }
+        }
+        this.x += (this.baseVx * globalSpeed + this.vx) * dt;
+        this.y += (this.baseVy * globalSpeed + this.vy) * dt;
+        this.z += this.baseVz * globalSpeed * dt;
+        this.vx *= 0.85; this.vy *= 0.85;
+      }
+      draw() {
+        const sc = fov / (fov + this.z);
+        const sx = width / 2 + this.x * sc, sy = height / 2 + this.y * sc;
+        this.sx = sx; this.sy = sy;
+        const op = Math.sin((this.life / this.maxLife) * Math.PI);
+        this.currentOpacity = op;
+        const as = minSize + this.sizeFactor * (maxSize - minSize);
+        ctx.globalAlpha = op;
+        if (this.isBlurred) {
+          const ds = as * sc * blurIntensity;
+          ctx.drawImage(blurCanvas, sx - ds / 2, sy - ds / 2, ds, ds);
+        } else {
+          ctx.beginPath(); ctx.arc(sx, sy, as * sc, 0, Math.PI * 2);
+          ctx.fillStyle = '#fff'; ctx.fill();
+        }
+        ctx.globalAlpha = 1;
+      }
+    }
+
+    for (let i = 0; i < numParticles; i++) particles.push(new Particle(true));
+
+    let lastTime = 0;
+    function animate(time) {
+      if (!lastTime) lastTime = time;
+      const dt = (time - lastTime) / 16.666;
+      lastTime = time;
+      ctx.clearRect(0, 0, width, height);
+      particles.sort((a, b) => b.z - a.z);
+      for (let i = 0; i < particles.length; i++) { particles[i].update(dt); particles[i].draw(); }
+      if (linesEnabled) {
+        ctx.lineWidth = 1;
+        const conn = particles.filter(p => p.canConnect);
+        for (let i = 0; i < conn.length; i++) {
+          for (let j = i + 1; j < conn.length; j++) {
+            const p1 = conn[i], p2 = conn[j];
+            const dx = p1.sx - p2.sx, dy = p1.sy - p2.sy;
+            const d2 = dx * dx + dy * dy, md2 = maxLineLength * maxLineLength;
+            if (d2 < md2) {
+              ctx.beginPath(); ctx.moveTo(p1.sx, p1.sy);
+              if (curvesEnabled) {
+                const d = Math.sqrt(d2);
+                if (d > 0.1) {
+                  const mx = (p1.sx + p2.sx) / 2, my = (p1.sy + p2.sy) / 2;
+                  const off = d * 0.3;
+                  ctx.quadraticCurveTo(mx + (-dy / d) * off, my + (dx / d) * off, p2.sx, p2.sy);
+                } else ctx.lineTo(p2.sx, p2.sy);
+              } else ctx.lineTo(p2.sx, p2.sy);
+              const lo = Math.min(p1.currentOpacity, p2.currentOpacity) * (1 - Math.sqrt(d2) / maxLineLength);
+              ctx.strokeStyle = `rgba(255,255,255,${lo})`; ctx.stroke();
+            }
+          }
+        }
+      }
+      requestAnimationFrame(animate);
+    }
+    requestAnimationFrame(animate);
+  </script>
+</body>
+</html>
