@@ -61,7 +61,7 @@
       width  = canvas.width  = canvas.offsetWidth;
       height = canvas.height = canvas.offsetHeight;
       mainRadius = Math.min(width, height) * 0.25;
-      tubeRadius = Math.min(width, height) * 0.25;
+      tubeRadius = Math.min(width, height) * 0.15;
     }
 
     window.addEventListener('resize', resize);
@@ -86,7 +86,7 @@
         this.life = 0;
         const u = Math.random() * 2 * Math.PI;
         const v = Math.random() * 2 * Math.PI;
-        const rm = Math.random() * tubeRadius;
+        const rm = tubeRadius * (0.7 + Math.random() * 0.3);
         this.x = (mainRadius + rm * Math.cos(v)) * Math.cos(u);
         this.y = (mainRadius + rm * Math.cos(v)) * Math.sin(u);
         this.z = rm * Math.sin(v);
