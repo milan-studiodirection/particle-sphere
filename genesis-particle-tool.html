@@ -17,6 +17,21 @@
       top: 0; left: 0;
       width: 100%; height: 100%;
     }
+    /* Checkerboard shown when bg is transparent */
+    body.transparent-bg::before {
+      content: '';
+      position: fixed; inset: 0; z-index: 0;
+      background-image:
+        linear-gradient(45deg, #333 25%, transparent 25%),
+        linear-gradient(-45deg, #333 25%, transparent 25%),
+        linear-gradient(45deg, transparent 75%, #333 75%),
+        linear-gradient(-45deg, transparent 75%, #333 75%);
+      background-size: 20px 20px;
+      background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
+      background-color: #222;
+      pointer-events: none;
+    }
+    canvas { z-index: 1; }
     .controls {
       position: fixed; bottom: 24px; left: 50%;
       transform: translateX(-50%);
@@ -66,25 +81,20 @@
       width: 12px; height: 12px; background: white; border-radius: 50%;
     }
 
-    /* ── Color picker ── */
-    .color-group {
-      display: flex; flex-direction: column; gap: 10px; min-width: 130px;
-    }
-    .color-row {
-      display: flex; flex-direction: column; gap: 6px;
-    }
+    /* ── Color pickers ── */
+    .color-group { display: flex; flex-direction: column; gap: 10px; min-width: 130px; }
+    .color-row { display: flex; flex-direction: column; gap: 6px; }
     .color-row label.title { margin-bottom: 0; }
-    .color-input-row {
-      display: flex; align-items: center; gap: 8px;
-    }
+    .color-input-row { display: flex; align-items: center; gap: 8px; }
     .color-swatch {
       width: 28px; height: 28px; border-radius: 50%;
       border: 2px solid rgba(255,255,255,0.25);
       cursor: pointer; flex-shrink: 0;
       position: relative; overflow: hidden;
-      transition: border-color 0.15s;
+      transition: border-color 0.15s, opacity 0.15s;
     }
     .color-swatch:hover { border-color: rgba(255,255,255,0.6); }
+    .color-swatch.disabled { opacity: 0.3; pointer-events: none; }
     .color-swatch input[type="color"] {
       position: absolute; top: -4px; left: -4px;
       width: calc(100% + 8px); height: calc(100% + 8px);
@@ -97,8 +107,36 @@
       border-radius: 4px; font-size: 12px;
       font-family: monospace; outline: none;
       width: 80px; letter-spacing: 0.05em;
+      transition: opacity 0.15s;
     }
     .hex-input:focus { border-color: rgba(255,255,255,0.5); }
+    .hex-input.disabled { opacity: 0.3; pointer-events: none; }
+
+    /* Transparent toggle */
+    .toggle-row {
+      display: flex; align-items: center; gap: 8px; margin-top: 2px;
+    }
+    .toggle-label {
+      font-size: 10px; text-transform: uppercase; letter-spacing: 0.15em;
+      opacity: 0.5; user-select: none; cursor: pointer;
+    }
+    .toggle {
+      position: relative; width: 32px; height: 18px; flex-shrink: 0;
+    }
+    .toggle input { opacity: 0; width: 0; height: 0; }
+    .toggle-slider {
+      position: absolute; inset: 0; cursor: pointer;
+      background: rgba(255,255,255,0.15); border-radius: 18px;
+      transition: background 0.2s;
+    }
+    .toggle-slider::before {
+      content: ''; position: absolute;
+      width: 12px; height: 12px; border-radius: 50%;
+      left: 3px; top: 3px; background: #fff;
+      transition: transform 0.2s;
+    }
+    .toggle input:checked + .toggle-slider { background: rgba(255,255,255,0.5); }
+    .toggle input:checked + .toggle-slider::before { transform: translateX(14px); }
 
     /* ── Export ── */
     .export-group { display: flex; flex-direction: column; gap: 8px; min-width: 140px; }
@@ -180,9 +218,8 @@
 
     <div class="divider"></div>
 
-    <!-- Color pickers -->
+    <!-- Colors -->
     <div class="color-group">
-      <!-- Background -->
       <div class="color-row">
         <label class="title">Background</label>
         <div class="color-input-row">
@@ -191,8 +228,14 @@
           </div>
           <input type="text" class="hex-input" id="bgHex" value="#020202" maxlength="7" spellcheck="false">
         </div>
+        <div class="toggle-row">
+          <label class="toggle" for="transparentToggle">
+            <input type="checkbox" id="transparentToggle">
+            <span class="toggle-slider"></span>
+          </label>
+          <span class="toggle-label" style="cursor:pointer" onclick="document.getElementById('transparentToggle').click()">Transparent</span>
+        </div>
       </div>
-      <!-- Dot color -->
       <div class="color-row">
         <label class="title">Dot Color</label>
         <div class="color-input-row">
@@ -225,37 +268,35 @@
     const ctx     = canvas.getContext('2d');
     const toast   = document.getElementById('toast');
 
-    // Color state
-    let bgColorVal  = '#020202';
-    let dotColorVal = '#ffffff';
+    let bgColorVal      = '#020202';
+    let dotColorVal     = '#ffffff';
+    let isTransparent   = false;
 
-    // ── Color picker wiring ──────────────────────────────────
+    // ── Helpers ──────────────────────────────────────────────
     function hexToRgb(hex) {
-      const r = parseInt(hex.slice(1,3),16);
-      const g = parseInt(hex.slice(3,5),16);
-      const b = parseInt(hex.slice(5,7),16);
-      return { r, g, b };
+      return {
+        r: parseInt(hex.slice(1,3),16),
+        g: parseInt(hex.slice(3,5),16),
+        b: parseInt(hex.slice(5,7),16)
+      };
     }
     function isValidHex(h) { return /^#[0-9a-fA-F]{6}$/.test(h); }
 
+    // ── Color picker setup ───────────────────────────────────
     function setupColorPicker(colorInputId, hexInputId, swatchId, onUpdate) {
       const colorInput = document.getElementById(colorInputId);
       const hexInput   = document.getElementById(hexInputId);
       const swatch     = document.getElementById(swatchId);
 
       function applyColor(hex) {
-        colorInput.value    = hex;
-        hexInput.value      = hex;
+        colorInput.value        = hex;
+        hexInput.value          = hex;
         swatch.style.background = hex;
         onUpdate(hex);
       }
 
-      // Native color picker changed
-      colorInput.addEventListener('input', () => {
-        applyColor(colorInput.value);
-      });
+      colorInput.addEventListener('input', () => applyColor(colorInput.value));
 
-      // Hex field typed
       hexInput.addEventListener('input', () => {
         let val = hexInput.value.trim();
         if (!val.startsWith('#')) val = '#' + val;
@@ -263,18 +304,30 @@
         if (isValidHex(val)) applyColor(val);
       });
       hexInput.addEventListener('blur', () => {
-        if (!isValidHex(hexInput.value)) {
-          // revert to last valid
-          hexInput.value = colorInput.value;
-        }
+        if (!isValidHex(hexInput.value)) hexInput.value = colorInput.value;
       });
 
-      // Init swatch bg
       swatch.style.background = colorInput.value;
     }
 
     setupColorPicker('bgColor',  'bgHex',  'bgSwatch',  hex => { bgColorVal  = hex; });
     setupColorPicker('dotColor', 'dotHex', 'dotSwatch', hex => { dotColorVal = hex; });
+
+    // ── Transparent toggle ───────────────────────────────────
+    const transparentToggle = document.getElementById('transparentToggle');
+    const bgSwatch          = document.getElementById('bgSwatch');
+    const bgHexInput        = document.getElementById('bgHex');
+
+    transparentToggle.addEventListener('change', () => {
+      isTransparent = transparentToggle.checked;
+
+      // Show checkerboard preview on body
+      document.body.classList.toggle('transparent-bg', isTransparent);
+
+      // Disable/enable bg picker visually
+      bgSwatch.classList.toggle('disabled', isTransparent);
+      bgHexInput.classList.toggle('disabled', isTransparent);
+    });
 
     // ── SVG sources ──────────────────────────────────────────
     const svgSources = [
@@ -325,7 +378,8 @@
     exportBtn.addEventListener('click', () => {
       if (!validPoints.length) { showToast('⚠ No shape active.'); return; }
       exportBtn.disabled = true;
-      showToast(`Rendering ${selectedRes.w} × ${selectedRes.h}…`, 5000);
+      const label = isTransparent ? 'transparent PNG' : `${selectedRes.w}×${selectedRes.h}`;
+      showToast(`Rendering ${label}…`, 5000);
 
       setTimeout(() => {
         const ew = selectedRes.w, eh = selectedRes.h;
@@ -337,11 +391,13 @@
         ec.width   = ew; ec.height = eh;
         const ectx = ec.getContext('2d');
 
-        ectx.fillStyle = bgColorVal;
-        ectx.fillRect(0, 0, ew, eh);
+        if (!isTransparent) {
+          ectx.fillStyle = bgColorVal;
+          ectx.fillRect(0, 0, ew, eh);
+        }
+        // transparent: skip fill — canvas default is transparent
 
         const { r, g, b } = hexToRgb(dotColorVal);
-
         particles.forEach(p => {
           if (p.opacity <= 0) return;
           ectx.globalAlpha = p.opacity;
@@ -353,8 +409,9 @@
         ectx.globalAlpha = 1;
 
         const activeIdx = [...checkInputs].findIndex(i => i.checked);
-        const label     = activeIdx >= 0 ? `product-${activeIdx + 1}` : 'shape';
-        const filename  = `genesis-${label}-${ew}x${eh}.png`;
+        const shapeLabel = activeIdx >= 0 ? `product-${activeIdx + 1}` : 'shape';
+        const suffix     = isTransparent ? 'transparent' : `${ew}x${eh}`;
+        const filename   = `genesis-${shapeLabel}-${suffix}.png`;
 
         ec.toBlob(blob => {
           const a  = document.createElement('a');
@@ -468,11 +525,13 @@
     }
 
     function animate() {
-      // Background
-      const { r: br, g: bg, b: bb } = hexToRgb(bgColorVal);
-      ctx.fillStyle = `rgba(${br},${bg},${bb},1)`;
-      ctx.fillRect(0, 0, width, height);
-
+      if (isTransparent) {
+        ctx.clearRect(0, 0, width, height);
+      } else {
+        const { r, g, b } = hexToRgb(bgColorVal);
+        ctx.fillStyle = `rgb(${r},${g},${b})`;
+        ctx.fillRect(0, 0, width, height);
+      }
       spawn();
       particles = particles.filter(p => { p.update(); p.draw(); return p.life < p.maxLife; });
       requestAnimationFrame(animate);
